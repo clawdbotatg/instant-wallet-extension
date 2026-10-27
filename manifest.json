@@ -11,7 +11,7 @@
     "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png" }
   },
   "background": { "service_worker": "background.js" },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": ["https://instantwallet.io/*", "https://instant-wallet-b2jn.vercel.app/*"],
   "content_scripts": [
     {

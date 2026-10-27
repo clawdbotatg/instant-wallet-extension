@@ -1,4 +1,8 @@
 // Runs on the Instant Wallet site. Passes sites' requests to the page (lib/extension.ts) and the answers back.
+// Chrome only adds this to tabs opened after install; background.js adds it to the ones already open, so it can
+// arrive late: "hello" asks the page to say "ready" again.
+if (!globalThis.__iwWallet) {
+globalThis.__iwWallet = true;
 let ready = null; // { address, chainIds } while a wallet is open on this page
 
 window.addEventListener("message", e => {
@@ -18,3 +22,6 @@ chrome.runtime.onMessage.addListener((m, _sender, reply) => {
   if (m.type === "ping") return reply({ ready: !!ready });
   if (m.type === "req") window.postMessage({ __iwx: "req", ...m.req }, location.origin);
 });
+
+window.postMessage({ __iwx: "hello" }, location.origin);
+}

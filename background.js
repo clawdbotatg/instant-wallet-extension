@@ -102,11 +102,24 @@ async function flushOne(entry, tab) {
 
 async function readyWallet() {
   for (const t of await chrome.tabs.query({ url: WALLET_TABS })) {
-    const r = await chrome.tabs.sendMessage(t.id, { type: "ping" }).catch(() => null);
+    let r = await chrome.tabs.sendMessage(t.id, { type: "ping" }).catch(() => null);
+    if (!r) {
+      // opened before the extension was installed or updated: add wallet.js now, give the page a moment to answer
+      await addWalletScript(t);
+      await new Promise(ok => setTimeout(ok, 300));
+      r = await chrome.tabs.sendMessage(t.id, { type: "ping" }).catch(() => null);
+    }
     if (r?.ready) return t;
   }
   return null;
 }
+
+const addWalletScript = t => chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["wallet.js"] }).catch(() => {});
+
+// Install or update: Chrome doesn't add content scripts to tabs already open. Add wallet.js to open wallet tabs.
+chrome.runtime.onInstalled.addListener(async () => {
+  for (const t of await chrome.tabs.query({ url: WALLET_TABS })) await addWalletScript(t);
+});
 
 async function openWallet() {
   const [open] = await chrome.tabs.query({ url: WALLET_TABS });
