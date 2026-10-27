@@ -1,12 +1,11 @@
-// Instant Wallet extension, the background. It holds no keys. It routes: a site's request → the Instant Wallet tab,
-// the answer → back to the site. Chrome stops this worker when idle, so nothing lives in memory: where an answer
+// Instant Wallet extension, the background. It holds no keys. It routes: a site's request → the Instant Wallet
+// window, the answer → back to the site. Chrome stops this worker when idle, so nothing lives in memory: where an answer
 // goes rides in the request id (rid = tab:frame:id), the rest is chrome.storage.
 //   local:   account { address, chainIds }, wallet (the Instant Wallet origin last used), sites { origin: { chainId, connected } },
 //            takeover (act as MetaMask), calls { hash: chainId }
-//   session: queue (requests waiting for a wallet to open)
+//   session: see "the wallet window" below
 
 const WALLETS = ["https://instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
-const WALLET_TABS = WALLETS.map(o => `${o}/*`);
 
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   const fromWallet = WALLETS.includes(sender.origin);
@@ -21,7 +20,7 @@ async function fromSite(m, sender) {
   if (!sender.tab || m.type === "ready" || m.type === "res") return { error: { code: 4100, message: "Not allowed" } };
   if (m.type === "rpc") return rpc(m.chainId, m.method, m.params);
   if (m.type === "ask") {
-    // connect (no wallet known yet) or a key request: queue it for the Instant Wallet tab, answer later
+    // connect (no wallet known yet) or a key request: to the Instant Wallet window, answered later
     const origin = sender.origin;
     const entry = {
       rid: `${sender.tab.id}:${sender.frameId ?? 0}:${m.id}`,
@@ -48,88 +47,123 @@ async function rpc(chainId, method, params) {
   return j.error ? { error: j.error.code ? j.error : { code: -32603, message: String(j.error) } } : { result: j.result };
 }
 
-// ------------------------------------------------------------------ the wallet tab
+// ------------------------------------------------------------------ the wallet window
+
+// A site's request opens Instant Wallet in a small window (like MetaMask). It closes once every request in it is
+// answered; closing it yourself rejects what's left.
+//   session: popup { windowId, tabId }, queue (requests waiting for it to say ready), sent (rids it has, unanswered)
 
 async function fromWalletPage(m, sender) {
   if (m.type === "ready") {
     const address = String(m.address);
     const chainIds = (m.chainIds || []).map(Number);
     await chrome.storage.local.set({ account: { address, chainIds }, wallet: sender.origin });
-    await flush(sender.tab);
+    const { popup } = await chrome.storage.session.get("popup");
+    if (popup && sender.tab?.id === popup.tabId) await inLine(() => flush(sender.tab));
     return {};
   }
   if (m.type === "res") {
-    const [tabId, frameId, id] = String(m.rid).split(":");
-    await chrome.tabs.sendMessage(Number(tabId), { type: "res", id: Number(id), result: m.result, error: m.error }, { frameId: Number(frameId) }).catch(() => {});
-    await focus(await chrome.tabs.get(Number(tabId)).catch(() => null));
+    await answerSite(m.rid, m.error ? { error: m.error } : { result: m.result });
+    await inLine(async () => {
+      const { sent = [] } = await chrome.storage.session.get("sent");
+      const left = sent.filter(r => r !== m.rid);
+      await chrome.storage.session.set({ sent: left });
+      if (!left.length) await closePopupIfIdle();
+    });
     return {};
   }
   return {};
 }
 
-/** Send one request to a wallet tab that's open and unlocked, or queue it and open one. */
-async function forward(entry) {
-  const tab = await readyWallet();
-  if (tab && entry.method !== "eth_requestAccounts") {
-    await chrome.tabs.sendMessage(tab.id, { type: "req", req: entry });
-    return focus(tab);
-  }
-  if (tab && entry.method === "eth_requestAccounts") return flushOne(entry, tab);
+async function answerSite(rid, answer) {
+  const [tabId, frameId, id] = String(rid).split(":");
+  await chrome.tabs.sendMessage(Number(tabId), { type: "res", id: Number(id), ...answer }, { frameId: Number(frameId) }).catch(() => {});
+}
+
+/** Hand one request to the wallet window, or queue it and open the window. One at a time, so two requests at
+ * once share one window. */
+let line = Promise.resolve();
+const inLine = f => (line = line.then(f, f));
+const forward = entry => inLine(() => forwardNow(entry));
+
+async function forwardNow(entry) {
+  const tab = await popupTab();
+  if (tab && (await isReady(tab))) return deliver(entry, tab);
   const { queue = [] } = await chrome.storage.session.get("queue");
   await chrome.storage.session.set({ queue: [...queue, entry] });
-  await openWallet();
+  if (tab) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  else await openPopup();
 }
 
-/** A wallet page came up: answer the connects, hand it the rest. */
+/** The window came up: hand it the queue. */
 async function flush(tab) {
   const { queue = [] } = await chrome.storage.session.get("queue");
-  if (!queue.length) return;
   await chrome.storage.session.set({ queue: [] });
-  for (const entry of queue) await flushOne(entry, tab);
+  for (const entry of queue) await deliver(entry, tab);
+  await closePopupIfIdle();
 }
 
-async function flushOne(entry, tab) {
+async function deliver(entry, tab) {
   if (entry.method === "eth_requestAccounts") {
+    // connecting needs only the address, which the window just gave us
     const { account, sites = {} } = await chrome.storage.local.get(["account", "sites"]);
     await chrome.storage.local.set({ sites: { ...sites, [entry.origin]: { ...sites[entry.origin], connected: true } } });
-    const [tabId, frameId, id] = entry.rid.split(":");
-    await chrome.tabs.sendMessage(Number(tabId), { type: "res", id: Number(id), result: [account.address] }, { frameId: Number(frameId) }).catch(() => {});
-    return focus(await chrome.tabs.get(Number(tabId)).catch(() => null));
+    return answerSite(entry.rid, { result: [account.address] });
   }
+  const { sent = [] } = await chrome.storage.session.get("sent");
+  await chrome.storage.session.set({ sent: [...sent, entry.rid] });
   await chrome.tabs.sendMessage(tab.id, { type: "req", req: entry }).catch(() => {});
-  await focus(tab);
+  await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
 }
 
-async function readyWallet() {
-  for (const t of await chrome.tabs.query({ url: WALLET_TABS })) {
-    let r = await chrome.tabs.sendMessage(t.id, { type: "ping" }).catch(() => null);
-    if (!r) {
-      // opened before the extension was installed or updated: add wallet.js now, give the page a moment to answer
-      await addWalletScript(t);
-      await new Promise(ok => setTimeout(ok, 300));
-      r = await chrome.tabs.sendMessage(t.id, { type: "ping" }).catch(() => null);
-    }
-    if (r?.ready) return t;
+async function popupTab() {
+  const { popup } = await chrome.storage.session.get("popup");
+  return popup ? chrome.tabs.get(popup.tabId).catch(() => null) : null;
+}
+
+async function isReady(tab) {
+  let r = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
+  if (!r) {
+    // open from before the extension was updated: add wallet.js now, give the page a moment to answer
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["wallet.js"] }).catch(() => {});
+    await new Promise(ok => setTimeout(ok, 300));
+    r = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
   }
-  return null;
+  return !!r?.ready;
 }
 
-const addWalletScript = t => chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["wallet.js"] }).catch(() => {});
+async function openPopup() {
+  const { wallet = WALLETS[0] } = await chrome.storage.local.get("wallet");
+  const width = 420, height = 760;
+  const at = await chrome.windows.getLastFocused().catch(() => null);
+  const pos = at?.left != null ? { left: Math.max(0, at.left + at.width - width - 16), top: at.top + 72 } : {};
+  const make = p => chrome.windows.create({ url: `${wallet}/`, type: "popup", width, height, focused: true, ...p });
+  const w = await make(pos).catch(() => make({})); // Chrome refuses a spot mostly off screen
+  await chrome.storage.session.set({ popup: { windowId: w.id, tabId: w.tabs[0].id } });
+}
 
-// Install or update: Chrome doesn't add content scripts to tabs already open. Add wallet.js to open wallet tabs.
-chrome.runtime.onInstalled.addListener(async () => {
-  for (const t of await chrome.tabs.query({ url: WALLET_TABS })) await addWalletScript(t);
-});
+async function closePopupIfIdle() {
+  const { popup, sent = [], queue = [] } = await chrome.storage.session.get(["popup", "sent", "queue"]);
+  if (!popup || sent.length || queue.length) return;
+  await chrome.storage.session.remove("popup");
+  await chrome.windows.remove(popup.windowId).catch(() => {});
+}
 
+// closed by hand: whatever the sites still wait for is rejected
+chrome.windows.onRemoved.addListener(id => inLine(async () => {
+  const { popup, sent = [], queue = [] } = await chrome.storage.session.get(["popup", "sent", "queue"]);
+  if (popup?.windowId !== id) return;
+  await chrome.storage.session.set({ popup: null, sent: [], queue: [] });
+  for (const rid of [...sent, ...queue.map(e => e.rid)]) await answerSite(rid, { error: { code: 4001, message: "User rejected" } });
+}));
+
+/** The toolbar popup's "Open Instant Wallet": a normal tab. */
 async function openWallet() {
-  const [open] = await chrome.tabs.query({ url: WALLET_TABS });
-  if (open) return focus(open);
+  const [open] = await chrome.tabs.query({ url: WALLETS.map(o => `${o}/*`) });
+  if (open) {
+    await chrome.tabs.update(open.id, { active: true }).catch(() => {});
+    return chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
+  }
   const { wallet = WALLETS[0] } = await chrome.storage.local.get("wallet");
   await chrome.tabs.create({ url: `${wallet}/` });
-}
-
-async function focus(tab) {
-  if (!tab) return;
-  await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
-  await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
 }
