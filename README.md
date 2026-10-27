@@ -18,8 +18,8 @@ The website lives in [clawdbotatg/instant-wallet](https://github.com/clawdbotatg
 |---|---|---|
 | `inpage.js` | in the site's page | the provider. Always in the site's wallet list as "Instant Wallet" (EIP-6963). "Act as MetaMask" on: also `window.ethereum`, `isMetaMask`, no lock (how Impersonator and WalletChan do it) |
 | `site.js` | on every site | answers what needs no key: address, network, switching, reads (through `/api/rpc`). Sends the rest on |
-| `background.js` | the extension | opens Instant Wallet in a small window (like MetaMask), hands it the request, sends the answer back. The window closes once everything in it is answered; closing it yourself rejects what's left |
-| `wallet.js` | on instantwallet.io | passes requests to the page (`web/lib/extension.ts`), which shows the same card as a WalletConnect request |
+| `background.js` | the extension | sends the request to the side panel if it's open, else opens Instant Wallet in a small window (like MetaMask), hands it the request, sends the answer back. The window closes once everything in it is answered; closing it yourself rejects what's left |
+| `wallet.js` | on instantwallet.io (and in the side panel's frame) | passes requests to the page (`web/lib/extension.ts`), which shows the same card as a WalletConnect request |
 | `panel.*` | the side panel (toolbar button) | the whole wallet (instantwallet.io in a frame), and under it: your address, the "Act as MetaMask" switch, connected sites |
 
 - Connecting a site doesn't open the wallet once the address is known: clicking Connect on the site was the yes.

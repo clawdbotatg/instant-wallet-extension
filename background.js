@@ -52,7 +52,8 @@ async function rpc(chainId, method, params) {
 
 // ------------------------------------------------------------------ the wallet window
 
-// A site's request opens Instant Wallet in a small window (like MetaMask). It closes once every request in it is
+// A site's request goes to the side panel when it's open with a wallet in it (toPanel). Otherwise it opens
+// Instant Wallet in a small window (like MetaMask). It closes once every request in it is
 // answered; closing it yourself rejects what's left.
 //   session: popup { windowId, tabId }, queue (requests waiting for it to say ready), sent (rids it has, unanswered)
 
@@ -90,12 +91,24 @@ const inLine = f => (line = line.then(f, f));
 const forward = entry => inLine(() => forwardNow(entry));
 
 async function forwardNow(entry) {
+  if (await toPanel(entry)) return;
   const tab = await popupTab();
   if (tab && (await isReady(tab))) return deliver(entry, tab);
   const { queue = [] } = await chrome.storage.session.get("queue");
   await chrome.storage.session.set({ queue: [...queue, entry] });
   if (tab) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
   else await openPopup();
+}
+
+/** The side panel is open in the site's window with a wallet in it: the request goes there, no window. */
+async function toPanel(entry) {
+  const site = await chrome.tabs.get(Number(entry.rid.split(":")[0])).catch(() => null);
+  if (!site) return false;
+  const req = entry.method === "eth_requestAccounts" ? null : entry; // connecting needs only the address
+  const r = await chrome.runtime.sendMessage({ type: "panel", windowId: site.windowId, req }).catch(() => null);
+  if (!r?.ready) return false;
+  if (!req) await deliver(entry, null);
+  return true;
 }
 
 /** The window came up: hand it the queue. */

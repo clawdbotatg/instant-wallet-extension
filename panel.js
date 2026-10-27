@@ -34,4 +34,17 @@ $("takeover").onchange = e => chrome.storage.local.set({ takeover: e.target.chec
 $("open").onclick = () => chrome.runtime.sendMessage({ type: "open" });
 chrome.storage.onChanged.addListener((_c, area) => area === "local" && draw());
 chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }) => ($("wallet").src = `${wallet}/`));
+
+// Sites' requests in this window come here while the framed wallet is open (wallet.js in the frame says so).
+let ready = false;
+let windowId = null;
+chrome.windows.getCurrent().then(w => (windowId = w.id));
+window.addEventListener("message", e => {
+  if (e.source === $("wallet").contentWindow && e.data?.__iwp === "ready") ready = e.data.ready;
+});
+chrome.runtime.onMessage.addListener((m, _sender, reply) => {
+  if (m.type !== "panel" || m.windowId !== windowId) return;
+  if (ready && m.req) $("wallet").contentWindow.postMessage({ __iwp: "req", req: m.req }, new URL($("wallet").src).origin);
+  reply({ ready });
+});
 draw();
