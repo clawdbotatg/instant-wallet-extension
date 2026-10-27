@@ -7,6 +7,9 @@
 
 const WALLETS = ["https://instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
 
+// the toolbar button opens the side panel: the whole wallet, docked next to the site
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   const fromWallet = WALLETS.includes(sender.origin);
   (fromWallet ? fromWalletPage(m, sender) : fromSite(m, sender)).then(reply, e => reply({ error: { code: -32603, message: String(e?.message || e) } }));
@@ -16,7 +19,7 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 // ------------------------------------------------------------------ sites
 
 async function fromSite(m, sender) {
-  if (m.type === "open") return openWallet(); // the popup's button
+  if (m.type === "open") return openWallet(); // the side panel's button
   if (!sender.tab || m.type === "ready" || m.type === "res") return { error: { code: 4100, message: "Not allowed" } };
   if (m.type === "rpc") return rpc(m.chainId, m.method, m.params);
   if (m.type === "ask") {

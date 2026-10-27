@@ -20,7 +20,7 @@ The website lives in [clawdbotatg/instant-wallet](https://github.com/clawdbotatg
 | `site.js` | on every site | answers what needs no key: address, network, switching, reads (through `/api/rpc`). Sends the rest on |
 | `background.js` | the extension | opens Instant Wallet in a small window (like MetaMask), hands it the request, sends the answer back. The window closes once everything in it is answered; closing it yourself rejects what's left |
 | `wallet.js` | on instantwallet.io | passes requests to the page (`web/lib/extension.ts`), which shows the same card as a WalletConnect request |
-| `popup.*` | the toolbar button | your address, the "Act as MetaMask" switch, connected sites |
+| `panel.*` | the side panel (toolbar button) | the whole wallet (instantwallet.io in a frame), and under it: your address, the "Act as MetaMask" switch, connected sites |
 
 - Connecting a site doesn't open the wallet once the address is known: clicking Connect on the site was the yes.
 - Sends answer with the tx hash as soon as the relay has it.

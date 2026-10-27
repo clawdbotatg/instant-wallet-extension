@@ -31,5 +31,7 @@ async function draw() {
 }
 
 $("takeover").onchange = e => chrome.storage.local.set({ takeover: e.target.checked });
-$("open").onclick = () => chrome.runtime.sendMessage({ type: "open" }).then(() => window.close());
+$("open").onclick = () => chrome.runtime.sendMessage({ type: "open" });
+chrome.storage.onChanged.addListener((_c, area) => area === "local" && draw());
+chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }) => ($("wallet").src = `${wallet}/`));
 draw();
