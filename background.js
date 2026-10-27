@@ -12,6 +12,13 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   const fromWallet = WALLETS.includes(sender.origin);
+  // a site's request slides the panel open. Chrome allows that only right after a click, so it's tried here, before
+  // anything waits; if Chrome says no, the small window opens instead
+  if (!fromWallet && m.type === "ask" && sender.tab)
+    m.opening = chrome.sidePanel.open({ windowId: sender.tab.windowId }).then(
+      () => true,
+      e => (console.warn("Instant Wallet: side panel didn't open:", e?.message || e), false),
+    );
   (fromWallet ? fromWalletPage(m, sender) : fromSite(m, sender)).then(reply, e => reply({ error: { code: -32603, message: String(e?.message || e) } }));
   return true;
 });
@@ -33,7 +40,7 @@ async function fromSite(m, sender) {
       params: m.params,
       chainId: m.chainId,
     };
-    await forward(entry);
+    await forward(entry, m.opening);
     return { queued: true };
   }
   return { error: { code: 4200, message: "Unknown" } };
@@ -88,10 +95,11 @@ async function answerSite(rid, answer) {
  * once share one window. */
 let line = Promise.resolve();
 const inLine = f => (line = line.then(f, f));
-const forward = entry => inLine(() => forwardNow(entry));
+const forward = (entry, opening) => inLine(() => forwardNow(entry, opening));
 
-async function forwardNow(entry) {
+async function forwardNow(entry, opening) {
   if (await toPanel(entry)) return;
+  if (opening && (await opening) && (await panelComesUp(entry))) return;
   const tab = await popupTab();
   if (tab && (await isReady(tab))) return deliver(entry, tab);
   const { queue = [] } = await chrome.storage.session.get("queue");
@@ -109,6 +117,15 @@ async function toPanel(entry) {
   if (!r?.ready) return false;
   if (!req) await deliver(entry, null);
   return true;
+}
+
+/** The panel just opened: give its wallet up to 10 s to load and say ready. */
+async function panelComesUp(entry) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise(ok => setTimeout(ok, 250));
+    if (await toPanel(entry)) return true;
+  }
+  return false;
 }
 
 /** The window came up: hand it the queue. */
