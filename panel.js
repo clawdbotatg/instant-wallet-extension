@@ -33,7 +33,7 @@ async function draw() {
 $("takeover").onchange = e => chrome.storage.local.set({ takeover: e.target.checked });
 $("open").onclick = () => chrome.runtime.sendMessage({ type: "open" });
 chrome.storage.onChanged.addListener((_c, area) => area === "local" && draw());
-chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }) => ($("wallet").src = `${wallet}/`));
+chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }) => ($("wallet").src = `${wallet}/?in=extension`));
 
 // Sites' requests in this window come here while the framed wallet is open (wallet.js in the frame says so).
 let ready = false;
