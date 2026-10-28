@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Instant Wallet",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "Use your Instant Wallet on any site. The site asks, you approve in Instant Wallet. No keys in the extension.",
   "homepage_url": "https://instantwallet.io",
   "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
