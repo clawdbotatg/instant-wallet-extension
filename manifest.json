@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Instant Wallet",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Use your Instant Wallet on any site. The site asks, you approve in Instant Wallet. No keys in the extension.",
   "homepage_url": "https://instantwallet.io",
   "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
@@ -9,9 +9,9 @@
     "default_title": "Instant Wallet",
     "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png" }
   },
-  "side_panel": { "default_path": "panel.html" },
+  "options_ui": { "page": "options.html" },
   "background": { "service_worker": "background.js" },
-  "permissions": ["storage", "tabs", "sidePanel"],
+  "permissions": ["storage", "tabs", "scripting"],
   "host_permissions": ["https://instantwallet.io/*", "https://instant-wallet-b2jn.vercel.app/*"],
   "content_scripts": [
     {
@@ -30,8 +30,7 @@
     {
       "matches": ["https://instantwallet.io/*", "https://instant-wallet-b2jn.vercel.app/*"],
       "js": ["wallet.js"],
-      "run_at": "document_start",
-      "all_frames": true
+      "run_at": "document_start"
     }
   ]
 }
