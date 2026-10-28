@@ -1,11 +1,12 @@
 # Chrome Web Store: to do
 
-Not started. What's needed to list the extension.
+Draft saved. Item ID `pbdhealfpnimcjjipgfhdplmecogkhdg`, publisher austin.griffith@ethereum.org (non-trader).
+The dashboard can't be driven by an extension (Chrome blocks it); a headless clone of the Chrome profile over CDP works.
 
 ## Account
-- [ ] Chrome developer account (one-time $5): https://chrome.google.com/webstore/devconsole
-- [ ] Publisher name "Instant Wallet", contact email, verified
-- [ ] 2-step verification on the Google account (required)
+- [x] Chrome developer account (one-time $5): https://chrome.google.com/webstore/devconsole
+- [x] Publisher name "Instant Wallet", contact email, verified
+- [x] 2-step verification on the Google account (required)
 
 ## Package
 - [ ] Zip of this folder (no `.git`, no `PLAN-*.md`, no `STORE.md`)
@@ -13,11 +14,11 @@ Not started. What's needed to list the extension.
 
 ## Listing
 - [ ] Short description (132 chars max)
-- [ ] Long description
-- [ ] Icon 128×128 (have: `icons/128.png`)
-- [ ] Screenshots, 1280×800: wallet list on Uniswap, the small wallet window, the toolbar menu
-- [ ] Small promo tile 440×280
-- [ ] Category: Productivity (or Developer Tools)
+- [x] Long description
+- [x] Icon 128×128 (have: `icons/128.png`)
+- [x] Screenshots, 1280×800: wallet list on Uniswap, the small wallet window, the toolbar menu
+- [x] Small promo tile 440×280
+- [x] Category: Tools
 
 ## Privacy (the review checks these)
 - [ ] Privacy policy URL (instantwallet.io/privacy exists: add a line about the extension)
