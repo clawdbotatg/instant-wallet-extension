@@ -2,3 +2,7 @@
 chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }) => {
   document.getElementById("wallet").src = `${wallet}/?in=extension&pair=wedgie`;
 });
+// picked: this popup's job is done
+window.addEventListener("message", e => {
+  if (e.source === document.getElementById("wallet").contentWindow && e.data?.__iwp === "paired") window.close();
+});

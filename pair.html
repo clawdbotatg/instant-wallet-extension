@@ -11,7 +11,7 @@
     </style>
   </head>
   <body>
-    <!-- the same frame as the side panel (same extension page origin, same wallet), so the port picked here is the panel's too -->
+    <!-- a popup (panel.js opens it): the same frame as the side panel (same extension page origin, same wallet), so the port picked here is the panel's too -->
     <iframe id="wallet" allow="publickey-credentials-get *; publickey-credentials-create *; serial *; camera *; clipboard-read *; clipboard-write *"></iframe>
     <script src="pair.js"></script>
   </body>
