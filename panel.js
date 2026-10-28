@@ -46,7 +46,10 @@ chrome.windows.getCurrent().then(w => {
   watch();
 });
 window.addEventListener("message", e => {
-  if (e.source !== $("wallet").contentWindow || e.data?.__iwp !== "ready") return;
+  if (e.source !== $("wallet").contentWindow) return;
+  // the wallet needs the wedgie's USB port, and Chrome can't show its picker in a side panel: pick it in a tab
+  if (e.data?.__iwp === "pair-wedgie") return void chrome.tabs.create({ url: chrome.runtime.getURL("pair.html") });
+  if (e.data?.__iwp !== "ready") return;
   if (e.data.ready && !ready) chrome.runtime.sendMessage({ type: "panel-up" }).catch(() => {}); // anything waiting comes here
   ready = e.data.ready;
 });
