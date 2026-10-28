@@ -38,13 +38,21 @@ chrome.storage.local.get("wallet").then(({ wallet = "https://instantwallet.io" }
 // Sites' requests in this window come here while the framed wallet is open (wallet.js in the frame says so).
 let ready = false;
 let windowId = null;
-chrome.windows.getCurrent().then(w => (windowId = w.id));
+// a port the background watches: when this panel closes, it says no to what the panel was showing. Chrome stops the
+// background when idle, which drops the port too: connect again
+const watch = () => chrome.runtime.connect({ name: `panel:${windowId}` }).onDisconnect.addListener(watch);
+chrome.windows.getCurrent().then(w => {
+  windowId = w.id;
+  watch();
+});
 window.addEventListener("message", e => {
-  if (e.source === $("wallet").contentWindow && e.data?.__iwp === "ready") ready = e.data.ready;
+  if (e.source !== $("wallet").contentWindow || e.data?.__iwp !== "ready") return;
+  if (e.data.ready && !ready) chrome.runtime.sendMessage({ type: "panel-up" }).catch(() => {}); // anything waiting comes here
+  ready = e.data.ready;
 });
 chrome.runtime.onMessage.addListener((m, _sender, reply) => {
-  if (m.type !== "panel" || m.windowId !== windowId) return;
-  if (ready && m.req) $("wallet").contentWindow.postMessage({ __iwp: "req", req: m.req }, new URL($("wallet").src).origin);
+  if (m.type !== "panel" || m.windowId !== windowId || !ready) return; // not ready: say nothing, another panel may be
+  if (m.req) $("wallet").contentWindow.postMessage({ __iwp: "req", req: m.req }, new URL($("wallet").src).origin);
   reply({ ready });
 });
 draw();

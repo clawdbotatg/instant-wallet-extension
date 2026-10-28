@@ -1,9 +1,8 @@
-// Instant Wallet extension, the background. It holds no keys. It routes: a site's request → the Instant Wallet
-// window, the answer → back to the site. Chrome stops this worker when idle, so nothing lives in memory: where an answer
-// goes rides in the request id (rid = tab:frame:id), the rest is chrome.storage.
+// Instant Wallet extension, the background. It holds no keys. It routes: a site's request → the side panel, the
+// answer → back to the site. Chrome stops this worker when idle, so nothing lives in memory: where an answer goes rides in the request id (rid = tab:frame:id), the rest is chrome.storage.
 //   local:   account { address, chainIds }, wallet (the Instant Wallet origin last used), sites { origin: { chainId, connected } },
 //            takeover (act as MetaMask), calls { hash: chainId }
-//   session: see "the wallet window" below
+//   session: see "the side panel" below
 
 const WALLETS = ["https://instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
 
@@ -13,12 +12,15 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   const fromWallet = WALLETS.includes(sender.origin);
   // a site's request slides the panel open. Chrome allows that only right after a click, so it's tried here, before
-  // anything waits; if Chrome says no, the small window opens instead
+  // anything waits
   if (!fromWallet && m.type === "ask" && sender.tab)
-    m.opening = chrome.sidePanel.open({ windowId: sender.tab.windowId }).then(
-      () => true,
-      e => (console.warn("Instant Wallet: side panel didn't open:", e?.message || e), false),
-    );
+    m.opening = Promise.race([
+      chrome.sidePanel.open({ windowId: sender.tab.windowId }).then(
+        () => true,
+        e => (console.warn("Instant Wallet: side panel didn't open:", e?.message || e), false),
+      ),
+      new Promise(ok => setTimeout(ok, 2000, false)), // it has hung (headless Chrome): don't hold every request
+    ]);
   (fromWallet ? fromWalletPage(m, sender) : fromSite(m, sender)).then(reply, e => reply({ error: { code: -32603, message: String(e?.message || e) } }));
   return true;
 });
@@ -27,10 +29,11 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 
 async function fromSite(m, sender) {
   if (m.type === "open") return openWallet(); // the side panel's button
+  if (m.type === "panel-up") return inLine(panelUp); // a side panel's wallet is ready
   if (!sender.tab || m.type === "ready" || m.type === "res") return { error: { code: 4100, message: "Not allowed" } };
   if (m.type === "rpc") return rpc(m.chainId, m.method, m.params);
   if (m.type === "ask") {
-    // connect (no wallet known yet) or a key request: to the Instant Wallet window, answered later
+    // connect (no wallet known yet) or a key request: to the side panel, answered later
     const origin = sender.origin;
     const entry = {
       rid: `${sender.tab.id}:${sender.frameId ?? 0}:${m.id}`,
@@ -57,31 +60,43 @@ async function rpc(chainId, method, params) {
   return j.error ? { error: j.error.code ? j.error : { code: -32603, message: String(j.error) } } : { result: j.result };
 }
 
-// ------------------------------------------------------------------ the wallet window
+// ------------------------------------------------------------------ the side panel
 
-// A site's request goes to the side panel when it's open with a wallet in it (toPanel). Otherwise it opens
-// Instant Wallet in a small window (like MetaMask). It closes once every request in it is
-// answered; closing it yourself rejects what's left.
-//   session: popup { windowId, tabId }, queue (requests waiting for it to say ready), sent (rids it has, unanswered)
+// A site's request goes to the side panel in the site's window, slid open if it's closed. If Chrome won't open it
+// (it allows that only right after a click) or its wallet doesn't come up, the request waits: the icon shows a count,
+// and opening the panel hands them over.
+// Closing the panel says no to what it was showing, like sliding the card down.
+//   session: queue (requests waiting for a panel), sent { windowId: [rid] } (in a panel, unanswered)
+
+// each panel holds a port open (panel.js): it closing = the panel closed
+chrome.runtime.onConnect.addListener(port => {
+  const [kind, windowId] = port.name.split(":");
+  if (kind !== "panel" || port.sender?.origin !== location.origin) return;
+  port.onDisconnect.addListener(() => inLine(() => panelClosed(windowId)));
+});
+
+async function panelClosed(windowId) {
+  const { sent = {} } = await chrome.storage.session.get("sent");
+  const rids = sent[windowId] || [];
+  delete sent[windowId];
+  await chrome.storage.session.set({ sent });
+  for (const rid of rids) await answerSite(rid, { error: { code: 4001, message: "User rejected the request" } });
+}
 
 async function fromWalletPage(m, sender) {
   if (m.type === "ready") {
     const address = String(m.address);
     const chainIds = (m.chainIds || []).map(Number);
     await chrome.storage.local.set({ account: { address, chainIds }, wallet: sender.origin });
-    const { popup } = await chrome.storage.session.get("popup");
-    if (popup && sender.tab?.id === popup.tabId) await inLine(() => flush(sender.tab));
     return {};
   }
   if (m.type === "res") {
     await answerSite(m.rid, m.error ? { error: m.error } : { result: m.result });
     await inLine(async () => {
-      const { sent = [] } = await chrome.storage.session.get("sent");
-      const left = sent.filter(r => r !== m.rid);
-      await chrome.storage.session.set({ sent: left });
-      if (!left.length) await closePopupIfIdle();
+      const { sent = {} } = await chrome.storage.session.get("sent");
+      for (const w in sent) sent[w] = sent[w].filter(r => r !== m.rid);
+      await chrome.storage.session.set({ sent });
     });
-    return {};
   }
   return {};
 }
@@ -91,8 +106,7 @@ async function answerSite(rid, answer) {
   await chrome.tabs.sendMessage(Number(tabId), { type: "res", id: Number(id), ...answer }, { frameId: Number(frameId) }).catch(() => {});
 }
 
-/** Hand one request to the wallet window, or queue it and open the window. One at a time, so two requests at
- * once share one window. */
+/** One request at a time. */
 let line = Promise.resolve();
 const inLine = f => (line = line.then(f, f));
 const forward = (entry, opening) => inLine(() => forwardNow(entry, opening));
@@ -100,22 +114,22 @@ const forward = (entry, opening) => inLine(() => forwardNow(entry, opening));
 async function forwardNow(entry, opening) {
   if (await toPanel(entry)) return;
   if (opening && (await opening) && (await panelComesUp(entry))) return;
-  const tab = await popupTab();
-  if (tab && (await isReady(tab))) return deliver(entry, tab);
   const { queue = [] } = await chrome.storage.session.get("queue");
-  await chrome.storage.session.set({ queue: [...queue, entry] });
-  if (tab) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
-  else await openPopup();
+  await setQueue([...queue, entry]);
 }
 
-/** The side panel is open in the site's window with a wallet in it: the request goes there, no window. */
+/** The side panel is open in the site's window with a wallet in it: the request goes there. */
 async function toPanel(entry) {
   const site = await chrome.tabs.get(Number(entry.rid.split(":")[0])).catch(() => null);
   if (!site) return false;
   const req = entry.method === "eth_requestAccounts" ? null : entry; // connecting needs only the address
   const r = await chrome.runtime.sendMessage({ type: "panel", windowId: site.windowId, req }).catch(() => null);
   if (!r?.ready) return false;
-  if (!req) await deliver(entry, null);
+  if (!req) await connect(entry);
+  else {
+    const { sent = {} } = await chrome.storage.session.get("sent");
+    await chrome.storage.session.set({ sent: { ...sent, [site.windowId]: [...(sent[site.windowId] || []), entry.rid] } });
+  }
   return true;
 }
 
@@ -128,69 +142,31 @@ async function panelComesUp(entry) {
   return false;
 }
 
-/** The window came up: hand it the queue. */
-async function flush(tab) {
+/** A panel's wallet came up: hand it what waits. Sites that closed meanwhile are dropped. */
+async function panelUp() {
   const { queue = [] } = await chrome.storage.session.get("queue");
-  await chrome.storage.session.set({ queue: [] });
-  for (const entry of queue) await deliver(entry, tab);
-  await closePopupIfIdle();
-}
-
-async function deliver(entry, tab) {
-  if (entry.method === "eth_requestAccounts") {
-    // connecting needs only the address, which the window just gave us
-    const { account, sites = {} } = await chrome.storage.local.get(["account", "sites"]);
-    await chrome.storage.local.set({ sites: { ...sites, [entry.origin]: { ...sites[entry.origin], connected: true } } });
-    return answerSite(entry.rid, { result: [account.address] });
+  const left = [];
+  for (const entry of queue) {
+    const site = await chrome.tabs.get(Number(entry.rid.split(":")[0])).catch(() => null);
+    if (site && !(await toPanel(entry))) left.push(entry);
   }
-  const { sent = [] } = await chrome.storage.session.get("sent");
-  await chrome.storage.session.set({ sent: [...sent, entry.rid] });
-  await chrome.tabs.sendMessage(tab.id, { type: "req", req: entry }).catch(() => {});
-  await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+  await setQueue(left);
 }
 
-async function popupTab() {
-  const { popup } = await chrome.storage.session.get("popup");
-  return popup ? chrome.tabs.get(popup.tabId).catch(() => null) : null;
+async function setQueue(queue) {
+  await chrome.storage.session.set({ queue });
+  await chrome.action.setBadgeBackgroundColor({ color: "#1a9a4a" }).catch(() => {});
+  await chrome.action.setBadgeText({ text: queue.length ? String(queue.length) : "" }).catch(() => {});
 }
 
-async function isReady(tab) {
-  let r = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
-  if (!r) {
-    // open from before the extension was updated: add wallet.js now, give the page a moment to answer
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["wallet.js"] }).catch(() => {});
-    await new Promise(ok => setTimeout(ok, 300));
-    r = await chrome.tabs.sendMessage(tab.id, { type: "ping" }).catch(() => null);
-  }
-  return !!r?.ready;
+/** Connecting needs only the address, which the panel's wallet just gave us. */
+async function connect(entry) {
+  const { account, sites = {} } = await chrome.storage.local.get(["account", "sites"]);
+  await chrome.storage.local.set({ sites: { ...sites, [entry.origin]: { ...sites[entry.origin], connected: true } } });
+  await answerSite(entry.rid, { result: [account.address] });
 }
 
-async function openPopup() {
-  const { wallet = WALLETS[0] } = await chrome.storage.local.get("wallet");
-  const width = 420, height = 760;
-  const at = await chrome.windows.getLastFocused().catch(() => null);
-  const pos = at?.left != null ? { left: Math.max(0, at.left + at.width - width - 16), top: at.top + 72 } : {};
-  const make = p => chrome.windows.create({ url: `${wallet}/`, type: "popup", width, height, focused: true, ...p });
-  const w = await make(pos).catch(() => make({})); // Chrome refuses a spot mostly off screen
-  await chrome.storage.session.set({ popup: { windowId: w.id, tabId: w.tabs[0].id } });
-}
-
-async function closePopupIfIdle() {
-  const { popup, sent = [], queue = [] } = await chrome.storage.session.get(["popup", "sent", "queue"]);
-  if (!popup || sent.length || queue.length) return;
-  await chrome.storage.session.remove("popup");
-  await chrome.windows.remove(popup.windowId).catch(() => {});
-}
-
-// closed by hand: whatever the sites still wait for is rejected
-chrome.windows.onRemoved.addListener(id => inLine(async () => {
-  const { popup, sent = [], queue = [] } = await chrome.storage.session.get(["popup", "sent", "queue"]);
-  if (popup?.windowId !== id) return;
-  await chrome.storage.session.set({ popup: null, sent: [], queue: [] });
-  for (const rid of [...sent, ...queue.map(e => e.rid)]) await answerSite(rid, { error: { code: 4001, message: "User rejected" } });
-}));
-
-/** The toolbar popup's "Open Instant Wallet": a normal tab. */
+/** The side panel's "Open Instant Wallet in a tab". */
 async function openWallet() {
   const [open] = await chrome.tabs.query({ url: WALLETS.map(o => `${o}/*`) });
   if (open) {
