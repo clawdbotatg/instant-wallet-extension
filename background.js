@@ -137,8 +137,9 @@ async function isReady(tab) {
 
 async function openPopup(byUser = false) {
   const { wallet = WALLETS[0] } = await chrome.storage.local.get("wallet");
-  const width = 420, height = 760;
   const at = await chrome.windows.getLastFocused().catch(() => null);
+  // tall as fits under the browser's toolbar, 760..920
+  const width = 420, height = at?.height ? Math.max(760, Math.min(920, at.height - 88)) : 920;
   const pos = at?.left != null ? { left: Math.max(0, at.left + at.width - width - 16), top: at.top + 72 } : {};
   const make = p => chrome.windows.create({ url: `${wallet}/`, type: "popup", width, height, focused: true, ...p });
   const w = await make(pos).catch(() => make({})); // Chrome refuses a spot mostly off screen
