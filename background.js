@@ -5,7 +5,8 @@
 //            takeover (act as MetaMask), calls { hash: chainId }
 //   session: see "the wallet window" below
 
-const WALLETS = ["https://instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
+// local.instantwallet.io: your own copy (instant-wallet run-local.sh). The one that last said ready gets the requests.
+const WALLETS = ["https://instantwallet.io", "https://local.instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
 
 // the toolbar button opens the same window, with the whole wallet in it
 chrome.action.onClicked.addListener(() => inLine(() => showWallet()));
