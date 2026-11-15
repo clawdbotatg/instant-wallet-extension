@@ -2,10 +2,11 @@ const $ = id => document.getElementById(id);
 
 async function draw() {
   const { account, sites = {}, takeover = false } = await chrome.storage.local.get(["account", "sites", "takeover"]);
-  $("who").innerHTML = account
-    ? `<div class="addr"></div><div class="dim">Same address on every network.</div>`
-    : `<div class="dim">Open Instant Wallet once so the extension knows your address.</div>`;
-  if (account) $("who").firstChild.textContent = account.address;
+  const who = $("who");
+  who.textContent = "";
+  const line = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; who.append(d); };
+  if (account) line("addr", account.address), line("dim", "Same address on every network.");
+  else line("dim", "Open Instant Wallet once so the extension knows your address.");
   $("takeover").checked = takeover;
   const list = $("sites");
   list.textContent = "";
