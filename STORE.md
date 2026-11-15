@@ -8,15 +8,13 @@ Draft saved 10-28. Item ID `pbdhealfpnimcjjipgfhdplmecogkhdg`, publisher austin.
 The dashboard can't be driven by an extension (Chrome blocks it); a headless clone of the Chrome profile over CDP works.
 Google asks that account to sign in again every so often ("Verify it's you"): Austin has to do that by hand.
 
-- [x] Developer account, publisher name "Instant Wallet", 2-step verification
-- [x] Long description, icon, screenshots (1280×800), promo tile (440×280), category Tools
-- [x] Short description: the store takes it from `manifest.json` (`description`)
-- [x] Privacy policy has the extension line (instantwallet.io/privacy)
-- [ ] Look over the saved listing once more (11-14: not seen since 10-28, the window has changed since: 0.1.9)
-- [ ] Upload `dist/chrome.zip`
-- [ ] Privacy tab, the text below
-- [ ] A real swap end to end, with other wallets installed next to it
-- [ ] Submit. Review takes a few days; all-sites wallets often get a closer look.
+**Submitted for review 11-14 (0.1.13). Status: pending review.** Broad host permissions mean an in-depth review (days,
+maybe longer). Publisher name "Instant Wallet", contact email verified, non-trader.
+
+- The dashboard has to be clicked by hand (Austin). Every page has its own Save draft; leaving a page without it loses the edits.
+- Listing: description, 2 screenshots (`1-wallet-list.png`, `2-approve.png`, on the v0.1.13 GitHub release), promo tile, category Tools.
+- Official URL is empty: it needs instantwallet.io verified in Google Search Console (optional).
+- For an update: bump the version, `./build.sh`, Package → Upload new package, Submit.
 
 ### Privacy tab
 
