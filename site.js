@@ -6,7 +6,7 @@ const REFUSED = ["eth_sign", "eth_signTransaction", "eth_sendRawTransaction"];
 const BASE = 8453;
 const origin = location.origin;
 const waiting = new Map(); // id → method, for requests answered later by the wallet tab
-let st = { account: null, site: {}, takeover: false };
+let st = { account: null, site: {} };
 
 const toPage = m => window.postMessage({ __iw: "ext", ...m }, "*");
 const hex = n => `0x${Number(n).toString(16)}`;
@@ -17,8 +17,8 @@ const accounts = () => (connected() ? [st.account.address] : []);
 const chains = () => st.account?.chainIds?.length ? st.account.chainIds : [BASE];
 
 async function load() {
-  const { account = null, sites = {}, takeover = false } = await chrome.storage.local.get(["account", "sites", "takeover"]);
-  st = { account, site: sites[origin] ?? {}, takeover };
+  const { account = null, sites = {} } = await chrome.storage.local.get(["account", "sites"]);
+  st = { account, site: sites[origin] ?? {} };
 }
 
 async function saveSite(patch) {
@@ -135,4 +135,4 @@ chrome.storage.onChanged.addListener(async (_c, area) => {
   if (chainId() !== before.chainId) toPage({ type: "event", name: "chainChanged", data: hex(chainId()) });
 });
 
-load().then(() => toPage({ type: "init", chainId: hex(chainId()), accounts: accounts(), takeover: st.takeover }));
+load().then(() => toPage({ type: "init", chainId: hex(chainId()), accounts: accounts() }));

@@ -2,7 +2,7 @@
 // window, the answer → back to the site. Chrome stops this worker when idle, so nothing lives in memory: where an answer
 // goes rides in the request id (rid = tab:frame:id), the rest is chrome.storage.
 //   local:   account { address, chainIds }, wallet (the Instant Wallet origin last used), sites { origin: { chainId, connected } },
-//            takeover (act as MetaMask), calls { hash: chainId }
+//            calls { hash: chainId }
 //   session: see "the wallet window" below
 
 // local.instantwallet.io: your own copy (instant-wallet run-local.sh). The one that last said ready gets the requests.
@@ -53,7 +53,7 @@ async function rpc(chainId, method, params) {
 
 // ------------------------------------------------------------------ the wallet window
 
-// A site's request opens Instant Wallet in a small window (like MetaMask). It closes once every request in it is
+// A site's request opens Instant Wallet in a small window. It closes once every request in it is
 // answered (unless you opened it with the toolbar button); closing it yourself rejects what's left.
 //   session: popup { windowId, tabId, byUser }, queue (requests waiting for it to say ready), sent (rids it has, unanswered)
 

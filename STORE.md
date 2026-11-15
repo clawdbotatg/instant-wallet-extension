@@ -15,7 +15,7 @@ Google asks that account to sign in again every so often ("Verify it's you"): Au
 - [ ] Look over the saved listing once more (11-14: not seen since 10-28, the window has changed since: 0.1.9)
 - [ ] Upload `dist/chrome.zip`
 - [ ] Privacy tab, the text below
-- [ ] A real swap end to end, next to MetaMask and Rainbow
+- [ ] A real swap end to end, with other wallets installed next to it
 - [ ] Submit. Review takes a few days; all-sites wallets often get a closer look.
 
 ### Privacy tab

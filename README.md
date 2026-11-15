@@ -1,7 +1,7 @@
 # Instant Wallet browser extension
 
-Use Instant Wallet on any site, like MetaMask. The extension holds no keys. A site asks, Instant Wallet pops up in
-a small window (like MetaMask), you approve there (Face ID, the wedgie), the answer goes back to the site.
+Use Instant Wallet on any site. The extension holds no keys. A site asks, Instant Wallet pops up in
+a small window, you approve there (Face ID, the wedgie), the answer goes back to the site.
 
 The website lives in [clawdbotatg/instant-wallet](https://github.com/clawdbotatg/instant-wallet); its side of this is
 `web/lib/extension.ts`.
@@ -16,11 +16,11 @@ The website lives in [clawdbotatg/instant-wallet](https://github.com/clawdbotatg
 
 | file | runs | does |
 |---|---|---|
-| `inpage.js` | in the site's page | the provider. Always in the site's wallet list as "Instant Wallet" (EIP-6963). "Act as MetaMask" on: also `window.ethereum`, `isMetaMask`, no lock (how Impersonator and WalletChan do it) |
+| `inpage.js` | in the site's page | the provider. Always in the site's wallet list as "Instant Wallet" (EIP-6963). It never takes `window.ethereum` |
 | `site.js` | on every site | answers what needs no key: address, network, switching, reads (through `/api/rpc`). Sends the rest on |
-| `background.js` | the extension | opens Instant Wallet in a small window (like MetaMask), hands it the request, sends the answer back. The window closes once everything in it is answered; closing it yourself rejects what's left. The toolbar button opens the same window, with the whole wallet |
+| `background.js` | the extension | opens Instant Wallet in a small window, hands it the request, sends the answer back. The window closes once everything in it is answered; closing it yourself rejects what's left. The toolbar button opens the same window, with the whole wallet |
 | `wallet.js` | on instantwallet.io | passes requests to the page (`web/lib/extension.ts`), which shows the same card as a WalletConnect request |
-| `options.*` | right-click the icon → Options | your address, the "Act as MetaMask" switch, connected sites |
+| `options.*` | right-click the icon → Options | your address, connected sites |
 
 - Connecting a site doesn't open the wallet once the address is known: clicking Connect on the site was the yes.
 - Sends answer with the tx hash as soon as the relay has it.

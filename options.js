@@ -1,13 +1,12 @@
 const $ = id => document.getElementById(id);
 
 async function draw() {
-  const { account, sites = {}, takeover = false } = await chrome.storage.local.get(["account", "sites", "takeover"]);
+  const { account, sites = {} } = await chrome.storage.local.get(["account", "sites"]);
   const who = $("who");
   who.textContent = "";
   const line = (cls, text) => { const d = document.createElement("div"); d.className = cls; d.textContent = text; who.append(d); };
   if (account) line("addr", account.address), line("dim", "Same address on every network.");
   else line("dim", "Open Instant Wallet once so the extension knows your address.");
-  $("takeover").checked = takeover;
   const list = $("sites");
   list.textContent = "";
   for (const [origin, s] of Object.entries(sites)) {
@@ -31,7 +30,6 @@ async function draw() {
   }
 }
 
-$("takeover").onchange = e => chrome.storage.local.set({ takeover: e.target.checked });
 $("open").onclick = () => chrome.runtime.sendMessage({ type: "open" });
 chrome.storage.onChanged.addListener((_c, area) => area === "local" && draw());
 draw();
