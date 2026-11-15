@@ -14,6 +14,10 @@ const err = (code, message) => ({ error: { code, message } });
 const chainId = () => st.site.chainId ?? BASE;
 const connected = () => !!(st.site.connected && st.account);
 const accounts = () => (connected() ? [st.account.address] : []);
+/** Has the person clicked, tapped or typed on this page at all? (Sticky: a site that asks seconds after the click, once
+ * its quote is back, still passes. A page nobody touched doesn't.) */
+const touched = () => navigator.userActivation?.hasBeenActive !== false;
+const MAX_WAITING = 5; // requests from one page the wallet hasn't answered yet
 const chains = () => st.account?.chainIds?.length ? st.account.chainIds : [BASE];
 
 async function load() {
@@ -38,6 +42,9 @@ async function handle(method, params, id) {
     case "eth_requestAccounts":
     case "wallet_requestPermissions": {
       const perm = [{ parentCapability: "eth_accounts" }];
+      // a first connect needs the person to have done something on this page (audit 11-13): a page they only opened
+      // got their address, and could pop the wallet window, with no click at all
+      if (!connected() && !touched()) return err(4001, "Click something on the page first, then connect.");
       if (!st.account) return ask("eth_requestAccounts", [], id, method); // no wallet seen yet: open Instant Wallet
       if (!connected()) await saveSite({ connected: true });
       return { result: method === "wallet_requestPermissions" ? perm : [st.account.address] };
@@ -77,6 +84,8 @@ async function handle(method, params, id) {
 
 /** Needs the wallet tab: answered later, through chrome.runtime.onMessage below. */
 async function ask(method, params, id, asked = method) {
+  if (!touched()) return err(4001, "Click something on the page first.");
+  if (waiting.size >= MAX_WAITING) return err(-32002, "Instant Wallet already has requests from this page. Answer those first.");
   waiting.set(id, asked);
   const r = await chrome.runtime.sendMessage({ type: "ask", id, method, params, chainId: chainId() });
   if (r?.error) return waiting.delete(id), r;

@@ -26,6 +26,6 @@ The website lives in [clawdbotatg/instant-wallet](https://github.com/clawdbotatg
 - Sends answer with the tx hash as soon as the relay has it.
 - The site's address the wallet shows comes from Chrome, not from the site.
 - Refused: `eth_sign`, `eth_signTransaction`, `eth_sendRawTransaction`.
-- Wallet sites: `instantwallet.io` and `instant-wallet-b2jn.vercel.app` (in `manifest.json` and `background.js`).
+- Wallet sites: `instantwallet.io` and `local.instantwallet.io`, your own copy (in `manifest.json` and `background.js`). No preview hosts.
   To try a local `web/`, add `http://localhost:3000/*` to both (not by default: localhost:3000 is also where most
   dapps run in dev).

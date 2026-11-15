@@ -6,7 +6,9 @@
 //   session: see "the wallet window" below
 
 // local.instantwallet.io: your own copy (instant-wallet run-local.sh). The one that last said ready gets the requests.
-const WALLETS = ["https://instantwallet.io", "https://local.instantwallet.io", "https://instant-wallet-b2jn.vercel.app"];
+// No preview host (audit 11-13): a *.vercel.app name can be freed and taken by anyone, and whoever serves it would
+// answer every request.
+const WALLETS = ["https://instantwallet.io", "https://local.instantwallet.io"];
 
 // the toolbar button opens the same window, with the whole wallet in it
 chrome.action.onClicked.addListener(() => inLine(() => showWallet()));
@@ -60,7 +62,8 @@ async function rpc(chainId, method, params) {
 async function fromWalletPage(m, sender) {
   if (m.type === "ready") {
     const address = String(m.address);
-    const chainIds = (m.chainIds || []).map(Number);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return { error: { code: -32602, message: "not an address" } };
+    const chainIds = (Array.isArray(m.chainIds) ? m.chainIds : []).map(Number).filter(n => Number.isSafeInteger(n) && n > 0).slice(0, 50);
     await chrome.storage.local.set({ account: { address, chainIds }, wallet: sender.origin });
     const { popup } = await chrome.storage.session.get("popup");
     if (popup && sender.tab?.id === popup.tabId) await inLine(() => flush(sender.tab));
